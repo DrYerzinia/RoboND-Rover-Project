@@ -5,13 +5,21 @@ from io import BytesIO, StringIO
 import base64
 import time
 
+# Define a function to convert telemetry strings to float independent of decimal convention
+def convert_to_float(string_to_convert):
+      if ',' in string_to_convert:
+            float_value = np.float(string_to_convert.replace(',','.'))
+      else: 
+            float_value = np.float(string_to_convert)
+      return float_value
+
 def update_rover(Rover, data):
       # Initialize start time and sample positions
       if Rover.start_time == None:
             Rover.start_time = time.time()
             Rover.total_time = 0
-            samples_xpos = np.int_([np.float(pos.strip()) for pos in data["samples_x"].split(',')])
-            samples_ypos = np.int_([np.float(pos.strip()) for pos in data["samples_y"].split(',')])
+            samples_xpos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_x"].split(';')])
+            samples_ypos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_y"].split(';')])
             Rover.samples_pos = (samples_xpos, samples_ypos)
             Rover.samples_found = np.zeros((len(Rover.samples_pos[0]))).astype(np.int)
       # Or just update elapsed time
@@ -20,27 +28,29 @@ def update_rover(Rover, data):
             if np.isfinite(tot_time):
                   Rover.total_time = tot_time
       # Print out the fields in the telemetry data dictionary
-      print(data.keys())
+      #print(data.keys())
       # The current speed of the rover in m/s
-      Rover.vel = np.float(data["speed"])
+      Rover.vel = convert_to_float(data["speed"])
       # The current position of the rover
-      Rover.pos = np.fromstring(data["position"], dtype=float, sep=',')
+      Rover.pos = [convert_to_float(pos.strip()) for pos in data["position"].split(';')]
       # The current yaw angle of the rover
-      Rover.yaw = np.float(data["yaw"])
+      Rover.yaw = convert_to_float(data["yaw"])
       # The current yaw angle of the rover
-      Rover.pitch = np.float(data["pitch"])
+      Rover.pitch = convert_to_float(data["pitch"])
       # The current yaw angle of the rover
-      Rover.roll = np.float(data["roll"])
+      Rover.roll = convert_to_float(data["roll"])
       # The current throttle setting
-      Rover.throttle = np.float(data["throttle"])
+      Rover.throttle = convert_to_float(data["throttle"])
       # The current steering angle
-      Rover.steer = np.float(data["steering_angle"])
+      Rover.steer = convert_to_float(data["steering_angle"])
       # Near sample flag
       Rover.near_sample = np.int(data["near_sample"])
-
-      print('speed =',Rover.vel, 'position =', Rover.pos, 'throttle =', 
-      Rover.throttle, 'steer_angle =', Rover.steer, 'near_sample', Rover.near_sample, data["picking_up"])
-
+      # Picking up flag
+      Rover.picking_up = np.int(data["picking_up"])
+      
+      #print('speed =',Rover.vel, 'position =', Rover.pos, 'throttle =', 
+      #Rover.throttle, 'steer_angle =', Rover.steer, 'near_sample', Rover.near_sample, 
+      #'picking_up', data["picking_up"])
       # Get the current image from the center camera of the rover
       imgString = data["image"]
       image = Image.open(BytesIO(base64.b64decode(imgString)))
@@ -79,7 +89,7 @@ def create_output_images(Rover):
       # to confirm whether detections are real
       if rock_world_pos[0].any():
             rock_size = 2
-            for idx in range(len(Rover.samples_pos[0]) - 1):
+            for idx in range(len(Rover.samples_pos[0])):
                   test_rock_x = Rover.samples_pos[0][idx]
                   test_rock_y = Rover.samples_pos[1][idx]
                   rock_sample_dists = np.sqrt((test_rock_x - rock_world_pos[1])**2 + \
@@ -87,6 +97,7 @@ def create_output_images(Rover):
                   # If rocks were detected within 3 meters of known sample positions
                   # consider it a success and plot the location of the known
                   # sample on the map
+                  #print(str(idx) + " " + str(np.min(rock_sample_dists))) # DEBUG cant see last rock
                   if np.min(rock_sample_dists) < 3:
                         Rover.samples_found[idx] = 1
                         map_add[test_rock_y-rock_size:test_rock_y+rock_size, 

@@ -74,6 +74,11 @@ class RoverState():
         self.samples_found = 0 # To count the number of samples found
         self.near_sample = False # Set to True if within reach of a rock sample
         self.pick_up = False # Set to True to trigger rock pickup
+        self.perception_count = 0 # Counter to keep track of when we cleanup the map every 200 frames
+        self.start_pos = None # Keeps track of starting position for when we return
+        self.collecting = False # keeps track of if we are currently collecting a sample so we dont resend any commands or double count a pickup
+        self.samples_collected = 0 # Keeps count of how many pickups we do so we can return to center of map at end
+        self.stuck_counter = 0 # Keeps count for unsticking operations, how long weve been stuck, how long weve attempted full throttle or yawing
 # Initialize our rover 
 Rover = RoverState()
 
@@ -100,7 +105,7 @@ def telemetry(sid, data):
             send_control(commands, out_image_string1, out_image_string2)
  
             # If in a state where want to pickup a rock send pickup command
-            if Rover.pick_up:
+            if Rover.pick_up and not Rover.picking_up:
                 send_pickup()
                 # Reset Rover flags
                 Rover.pick_up = False
@@ -140,11 +145,13 @@ def send_control(commands, image_string1, image_string2):
         'inset_image1': image_string1,
         'inset_image2': image_string2,
         }
+    #print("Sent Command: " + str(data['throttle']) + " " + str(data['brake']))
     # Send commands via socketIO server
     sio.emit(
         "data",
         data,
         skip_sid=True)
+    eventlet.sleep(0)
 
 # Define a function to send the "pickup" command 
 def send_pickup():
@@ -154,6 +161,7 @@ def send_pickup():
         "pickup",
         pickup,
         skip_sid=True)
+    eventlet.sleep(0)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Remote Driving')
@@ -166,7 +174,7 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
     
-    os.system('rm -rf IMG_stream/*')
+    #os.system('rm -rf IMG_stream/*')
     if args.image_folder != '':
         print("Creating image folder at {}".format(args.image_folder))
         if not os.path.exists(args.image_folder):
